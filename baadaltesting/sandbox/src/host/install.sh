@@ -16,10 +16,10 @@ function run
     --accelerate \
     --arch=$HOST_ARCH \
     --name $HOST_NAME \
-    --ram=$HOST_RAM \
-    --vcpus=$HOST_VCPUS \
+    --ram=1024 \
+    --vcpus=3 \
     --os-type=Linux \
-    --disk path=$HOST_DISK,format=qcow2,size=$HOST_SPACE \
+    --disk path=$HOST_DISK,format=qcow2,size=30 \
     --pxe \
     --network network=$OVS_NET_INTERNAL,mac=$MAC_HOST \
     --graphics vnc,listen=0.0.0.0 \

@@ -10,6 +10,7 @@ from vm_helper import install, shutdown, start, suspend, resume, destroy, delete
     revert, delete_snapshot, edit_vm_config, clone, attach_extra_disk, migrate_datastore,\
     save_as_template, delete_template
 from host_helper import host_status_sanity_check
+from balancer import load_balance
 from vm_utilization import update_rrd
 from nat_mapper import clear_all_timedout_vnc_mappings
 from log_handler import logger, rrd_logger

@@ -12,10 +12,10 @@ function run
     --accelerate \
     --arch=$FILER_ARCH \
     --name $FILER_NAME \
-    --ram=$FILER_RAM \
-    --vcpus=$FILER_VCPUS \
+    --ram=1024 \
+    --vcpus=2 \
     --os-type=Linux \
-    --disk path=$FILER_DISK,format=qcow2,size=$FILER_SPACE \
+    --disk path=$FILER_DISK,format=qcow2,size=60 \
     --cdrom $FILER_ISO \
     --network network=$OVS_NET_INTERNAL,mac=$MAC_FILER \
     --noautoconsole \

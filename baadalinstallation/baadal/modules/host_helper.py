@@ -153,6 +153,19 @@ def get_host_domains(host_ip):
         return domains
     except:
         raise
+    
+    
+def get_host_domains_ID(host_ip):
+    try:
+        conn = libvirt.openReadOnly('qemu+ssh://root@'+host_ip+'/system')
+        domains=[]
+               
+        for domain_id in conn.listDomainsID():
+            domains.append(domain_id)
+
+        conn.close()
+        return domains
+    except:    
 
 # Finds if the given host has a running vm
 def has_running_vm(host_ip):

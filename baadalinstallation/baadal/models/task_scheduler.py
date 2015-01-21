@@ -10,6 +10,7 @@ from vm_helper import install, shutdown, start, suspend, resume, destroy, delete
     revert, delete_snapshot, edit_vm_config, clone, attach_extra_disk, migrate_datastore,\
     save_as_template, delete_template
 from host_helper import host_status_sanity_check
+from balancer import load_balance
 from vm_utilization import update_rrd
 from nat_mapper import clear_all_timedout_vnc_mappings
 from log_handler import logger, rrd_logger
@@ -298,6 +299,21 @@ def check_vnc_access():
         pass
     finally: 
         logger.debug("EXITING CLEAR ALL TIMEDOUT VNC MAPPINGS........")
+        
+        
+def load_balancer():
+    """
+    Host Load Balancer
+    Invoked when scheduler runs task of type 'host_task'"""
+    
+    logger.info("ENTERNING LOAD BALANCER")
+    try:
+        load_balance()
+    except:
+        log_exception()
+        pass
+    finally: 
+        logger.debug("EXITING LOAD BALANCER........")        
 
 def vm_utilization_rrd(host_ip):
     """
@@ -421,7 +437,8 @@ vm_scheduler = Scheduler(db, tasks=dict(vm_task=process_task_queue,
                                         vm_util_rrd=vm_utilization_rrd,
                                         vm_daily_checks=process_vmdaily_checks,
                                         vm_purge_unused=process_unusedvm_purge,
-					                    memory_overload=overload_memory), 
+					                    memory_overload=overload_memory,
+					                    load_balance=load_balancer), 
                              group_names=['vm_task', 'vm_sanity', 'host_task', 'vm_rrd', 'snapshot_task'])
 
 
@@ -487,6 +504,14 @@ vm_scheduler.queue_task(TASK_PURGE_UNUSEDVM,
                     timeout = 5 * MINUTES,
                     uuid = UUID_PURGE_UNUSEDVM,
                     group_name = 'vm_sanity')
+                    
+vm_scheduler.queue_task(TASK_LOAD_BALANCE,
+                    repeats = 0, # run indefinitely
+                    start_time = request.now,
+                    period = 10 * MINUTES, # every 10 minutes
+                    timeout = 10 * MINUTES,
+                    uuid = UUID_LOAD_BALANCE
+                    group_name = 'host_task')
 
 vm_scheduler.queue_task('memory_overload',
                     repeats = 0, # run indefinitely

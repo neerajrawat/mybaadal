@@ -12,10 +12,10 @@ function run
     --accelerate \
     --arch=$CONTROLLER_ARCH \
     --name $CONTROLLER_NAME \
-    --ram=$CONTROLLER_RAM \
-    --vcpus=$CONTROLLER_VCPUS \
+    --ram=1024 \
+    --vcpus=2 \
     --os-type=Linux \
-    --disk path=$CONTROLLER_DISK,format=qcow2,size=$CONTROLLER_SPACE \
+    --disk path=$CONTROLLER_DISK,format=qcow2,size=30 \
     --cdrom $CONTROLLER_ISO \
     --network network=$OVS_NET_INTERNAL,mac=$MAC_CONTROLLER \
     --noautoconsole \

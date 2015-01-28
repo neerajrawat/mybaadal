@@ -33,34 +33,36 @@ def load_balance():
 	flag=0
 	while True:
 		flag=0
-		hostMIN=hosts[0]
-    		hostMAX=hosts[0]
-	
+		hostMIN_ip=''
+    		hostMAX_ip=''
+		hostMIN=host[0]
+		
 	    	migration_vector=0
     		HMAX=0
     		HMIN=9999
     			    	
     		for host in hosts:
-    			host_cpu_usage=get_host_cpu_usage(host['ip'])
+    			host_cpu_usage=get_host_cpu_usage(current.db.host[host['id']].host_ip.private_ip)
 			if host_cpu_usage > HMAX:
 				HMAX=host_cpu_usage
-				hostMAX=host
+				hostMAX_ip=current.db.host[host['id']].host_ip.private_ip
 		
 			if host_cpu_usage < HMIN:
 				HMIN=host_cpu_usage
-				hostMIN=host
+				hostMIN=host	
+				hostMIN_ip=current.db.host[host['id']].host_ip.private_ip
 		
     		migration_vector=get_migration_vector(HMAX,HMIN)
-    		vms=get_host_domains_ID(hostMAX['ip'])
+    		vms=get_host_domains_ID(hostMAX_ip)
 		
-    		conn = libvirt.openReadOnly('qemu+ssh://root@'+hostMAX['ip']+'/system')	
+    		conn = libvirt.openReadOnly('qemu+ssh://root@'+hostMAX_ip+'/system')	
     		dom_id=''
 		diff_cpu=999
     		for vm_id in vms
 			dom = conn.lookupByID(vm_id)
 			dom_info=dom.info()
 			if dom_info[0] == '1':
-				usage=get_actual_usage(dom,hostMAX['ip'])
+				usage=get_actual_usage(dom,hostMAX_ip)
 				dom_cpu=float(usage['cpu'])		
 				diff=abs(migration_vector - dom_cpu)
 				if diff < migration_vector and diff < diff_cpu:

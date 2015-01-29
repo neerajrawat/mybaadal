@@ -12,10 +12,10 @@ function run
     --accelerate \
     --arch=$NAT_ARCH \
     --name $NAT_NAME \
-    --ram=1024 \
-    --vcpus=2 \
+    --ram=$NAT_RAM \
+    --vcpus=$NAT_VCPUS \
     --os-type=Linux \
-    --disk path=$NAT_DISK,format=qcow2,size=30 \
+    --disk path=$NAT_DISK,format=qcow2,size=$NAT_SPACE \
     --cdrom $NAT_ISO \
     --network network=$OVS_NET_EXTERNAL \
     --network network=$OVS_NET_INTERNAL,mac=$MAC_NAT \

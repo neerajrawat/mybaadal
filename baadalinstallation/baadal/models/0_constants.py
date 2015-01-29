@@ -47,7 +47,6 @@ TASK_CLONE_VM = 'clone_task'
 TASK_VM = 'vm_task'
 TASK_DAILY_CHECKS = 'vm_daily_checks'
 TASK_PURGE_UNUSEDVM = 'vm_purge_unused'
-TASK_LOAD_BALANCE = 'load_balance'
 
 #Request Status
 REQ_STATUS_REQUESTED = 1
@@ -115,7 +114,6 @@ UUID_VNC_ACCESS = 'scheduler-uuid-vnc-access'
 UUID_MEMORY_OVERLOAD = 'scheduler-uuid-memory'
 UUID_DAILY_CHECKS = 'scheduler-uuid-daily-check'
 UUID_PURGE_UNUSEDVM = 'scheduler-uuid-purge-unusedvm'
-UUID_LOAD_BALANCE = 'scheduler-uuid-load-balancer'
 
 PUBLIC_IP_NOT_ASSIGNED = "Not Assigned"
 

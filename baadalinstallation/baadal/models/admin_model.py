@@ -60,7 +60,7 @@ def get_manage_datastore_form(req_type):
 def get_public_ip_ref_link(row):
     """Returns link to VM settings page if public IP is assigned to a VM
     or to host details page if public IP is assigned to a Host"""
-    vm_data = db.public_ip_pool(public_ip=row.id)
+    vm_data = db.vm_data(public_ip=row.id)
     host_data = db.host(public_ip=row.id)
 
     if vm_data:
@@ -230,12 +230,12 @@ def check_delete_security_domain(sd_id):
     
 def is_ip_assigned(ip_pool_id, is_private):
     if is_private:
-        private_ip_pool = db.db.private_ip_pool[ip_pool_id]
-        if (db.vm_data(private_ip = private_ip_pool.private_ip)) or (db.host(host_ip = private_ip_pool.private_ip)):
+        private_ip_pool = db.private_ip_pool[ip_pool_id]
+        if (db.vm_data(private_ip = private_ip_pool.id)) or (db.host(host_ip = private_ip_pool.id)):
             return PRIVATE_IP_DELETE_MESSAGE
     else:
-        public_ip_pool = db.db.public_ip_pool[ip_pool_id]
-        if (db.vm_data(public_ip = public_ip_pool.public_ip)) or (db.host(host_ip = public_ip_pool.public_ip)):
+        public_ip_pool = db.public_ip_pool[ip_pool_id]
+        if (db.vm_data(public_ip = public_ip_pool.id)) or (db.host(public_ip = public_ip_pool.id)):
             return PUBLIC_IP_DELETE_MESSAGE
 
 def get_all_pending_requests():
@@ -364,7 +364,7 @@ def create_edit_config_task(req_data, params):
     
     if vm_data.security_domain != req_data.security_domain : params['security_domain'] = req_data.security_domain
 
-    add_vm_task_to_queue(req_data.parent_id, req_data.request_type, params=params)
+    add_vm_task_to_queue(req_data.parent_id, req_data.request_type, params=params, requested_by=req_data.requester_id)
 
 def enqueue_vm_request(request_id):
     
@@ -408,7 +408,7 @@ def get_all_hosts() :
     hosts = db().select(db.host.ALL) 
     results = []
     for host in hosts:
-        results.append({'ip'    :host.host_ip, 
+        results.append({'ip'    :host.host_ip.private_ip, 
                         'id'    :host.id, 
                         'name'  :host.host_name, 
                         'status':host.status, 
@@ -438,8 +438,6 @@ def update_task_retry(event_id):
 
     task_event_data = db.task_queue_event[event_id]
     task_queue_data = db.task_queue[task_event_data.task_id]
-
-    vm_id = task_queue_data.parameters['vm_id'] if 'vm_id' in task_queue_data.parameters else None
     
     if 'request_id' in task_queue_data.parameters:
         #Mark status for request as 'In Queue'
@@ -447,13 +445,12 @@ def update_task_retry(event_id):
         if db.request_queue[request_id]:
             db.request_queue[request_id] = dict(status=REQ_STATUS_IN_QUEUE)
     
-    if vm_id:
-        if task_event_data.task_type == VM_TASK_CREATE:
-            db.vm_data[vm_id] = dict(status=VM_STATUS_IN_QUEUE)
-        elif task_event_data.task_type == VM_TASK_CLONE:
-            vm_list = task_queue_data.parameters['clone_vm_id']
-            for vm in vm_list:
-                db.vm_data[vm] = dict(status=VM_STATUS_IN_QUEUE)
+    if task_event_data.task_type == VM_TASK_CREATE:
+        db.vm_data[task_event_data.vm_id] = dict(status=VM_STATUS_IN_QUEUE)
+    elif task_event_data.task_type == VM_TASK_CLONE:
+        vm_list = task_queue_data.parameters['clone_vm_id']
+        for vm in vm_list:
+            db.vm_data[vm] = dict(status=VM_STATUS_IN_QUEUE)
 
     #Mark current task event for the task as IGNORE. 
     task_event_data.update_record(status=TASK_QUEUE_STATUS_RETRY)
@@ -466,22 +463,19 @@ def update_task_ignore(event_id):
     task_event_data = db.task_queue_event[event_id]
     task_queue_data = db.task_queue[task_event_data.task_id]
 
-    vm_id = task_queue_data.parameters['vm_id'] if 'vm_id' in task_queue_data.parameters else None
-
     if 'request_id' in task_event_data.parameters:
         request_id = task_event_data.parameters['request_id']
         if db.request_queue[request_id]:
             del db.request_queue[request_id]
     
-    if vm_id:
-        if task_event_data.task_type == VM_TASK_CREATE:
-            if db.vm_data[vm_id]: del db.vm_data[vm_id]
-        elif task_event_data.task_type == VM_TASK_CLONE:
-            vm_list = task_event_data.parameters['clone_vm_id']
-            for vm in vm_list:
-                if db.vm_data[vm]: del db.vm_data[vm]
+    if task_event_data.task_type == VM_TASK_CREATE:
+        if db.vm_data[task_event_data.vm_id]: del db.vm_data[task_event_data.vm_id]
+    elif task_event_data.task_type == VM_TASK_CLONE:
+        vm_list = task_event_data.parameters['clone_vm_id']
+        for vm in vm_list:
+            if db.vm_data[vm]: del db.vm_data[vm]
 
-    task_event_data.update_record(task_id = None, status=TASK_QUEUE_STATUS_IGNORE)
+    task_event_data.update_record(task_id = None, vm_id = None, status=TASK_QUEUE_STATUS_IGNORE)
 
     #Delete task from task_queue
     if task_queue_data:

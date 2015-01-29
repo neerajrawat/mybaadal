@@ -10,7 +10,6 @@ from vm_helper import install, shutdown, start, suspend, resume, destroy, delete
     revert, delete_snapshot, edit_vm_config, clone, attach_extra_disk, migrate_datastore,\
     save_as_template, delete_template
 from host_helper import host_status_sanity_check
-from balancer import load_balance
 from vm_utilization import update_rrd
 from nat_mapper import clear_all_timedout_vnc_mappings
 from log_handler import logger, rrd_logger
@@ -119,7 +118,7 @@ def process_task_queue(task_event_id):
     
     task_event_data = db.task_queue_event[task_event_id]
     task_queue_data = db.task_queue[task_event_data.task_id]
-    vm_id = task_queue_data.parameters['vm_id'] if 'vm_id' in task_queue_data.parameters else None
+    vm_data = db.vm_data[task_event_data.vm_id] if task_event_data.vm_id != None else None
     try:
         #Update attention_time for task in the event table
         task_event_data.update_record(attention_time=get_datetime(), status=TASK_QUEUE_STATUS_PROCESSING)
@@ -140,8 +139,7 @@ def process_task_queue(task_event_id):
         elif ret[0] == TASK_QUEUE_STATUS_SUCCESS:
             # Create log event for the task
             logger.debug("VM_TASK SUCCESSFUL")
-            if vm_id:
-                vm_data = db.vm_data[vm_id]
+            if vm_data:
                 log_vm_event(vm_data, task_queue_data)
             # For successful task, delete the task from queue 
             if db.task_queue[task_queue_data.id]:
@@ -299,21 +297,6 @@ def check_vnc_access():
         pass
     finally: 
         logger.debug("EXITING CLEAR ALL TIMEDOUT VNC MAPPINGS........")
-        
-        
-def load_balancer():
-    """
-    Host Load Balancer
-    Invoked when scheduler runs task of type 'host_task'"""
-    
-    logger.info("ENTERNING LOAD BALANCER")
-    try:
-        load_balance()
-    except:
-        log_exception()
-        pass
-    finally: 
-        logger.debug("EXITING LOAD BALANCER........")        
 
 def vm_utilization_rrd(host_ip):
     """
@@ -437,8 +420,7 @@ vm_scheduler = Scheduler(db, tasks=dict(vm_task=process_task_queue,
                                         vm_util_rrd=vm_utilization_rrd,
                                         vm_daily_checks=process_vmdaily_checks,
                                         vm_purge_unused=process_unusedvm_purge,
-					                    memory_overload=overload_memory,
-					                    load_balance=load_balancer), 
+					                    memory_overload=overload_memory), 
                              group_names=['vm_task', 'vm_sanity', 'host_task', 'vm_rrd', 'snapshot_task'])
 
 
@@ -504,14 +486,6 @@ vm_scheduler.queue_task(TASK_PURGE_UNUSEDVM,
                     timeout = 5 * MINUTES,
                     uuid = UUID_PURGE_UNUSEDVM,
                     group_name = 'vm_sanity')
-                    
-vm_scheduler.queue_task(TASK_LOAD_BALANCE,
-                    repeats = 0, # run indefinitely
-                    start_time = request.now,
-                    period = 10 * MINUTES, # every 10 minutes
-                    timeout = 10 * MINUTES,
-                    uuid = UUID_LOAD_BALANCE
-                    group_name = 'host_task')
 
 vm_scheduler.queue_task('memory_overload',
                     repeats = 0, # run indefinitely

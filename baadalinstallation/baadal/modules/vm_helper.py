@@ -52,7 +52,7 @@ def host_resources_used(host_id):
 def getVirshDomainConn(vm_details, host_ip=None, domain_name=None):
     
     if vm_details != None:
-        host_ip = vm_details.host_id.host_ip 
+        host_ip = vm_details.host_id.host_ip.private_ip
         domain_name = vm_details.vm_identity
     connection_object = libvirt.open("qemu+ssh://root@" + host_ip + "/system")
 
@@ -107,6 +107,20 @@ def get_private_ip_mac(security_domain_id):
         sd = current.db.security_domain[security_domain_id]
         raise Exception(("Available MACs are exhausted for security domain '%s'." % sd.name))
 
+
+def choose_random_public_ip():
+    """Chooses a random Public IP from the pool, such that:
+       1. It is not assigned to any VM
+       2. It is not assigned to any host
+       3. IP is marked active."""
+    public_ip_pool = current.db((~current.db.public_ip_pool.id.belongs(current.db(current.db.vm_data.public_ip != None)._select(current.db.vm_data.public_ip))) 
+                              & (~current.db.public_ip_pool.id.belongs(current.db(current.db.host.public_ip != None)._select(current.db.host.public_ip)))
+                              & (current.db.public_ip_pool.is_active == True)) \
+                            .select(current.db.public_ip_pool.ALL, orderby='<random>').first()
+
+    return public_ip_pool
+
+
 def choose_mac_ip(vm_properties):
     """Chooses mac address, ip address and vncport for a vm to be installed"""
 
@@ -119,9 +133,7 @@ def choose_mac_ip(vm_properties):
 
     if vm_properties['public_ip_req']:
         if 'public_ip' not in vm_properties:
-            public_ip_pool = current.db((~current.db.public_ip_pool.id.belongs(current.db(current.db.vm_data.public_ip != None)._select(current.db.vm_data.public_ip))) 
-                                      & (~current.db.public_ip_pool.id.belongs(current.db(current.db.host.public_ip != None)._select(current.db.host.public_ip)))) \
-                                    .select(current.db.public_ip_pool.ALL, orderby='<random>').first()
+            public_ip_pool = choose_random_public_ip()
 
             if public_ip_pool:
                 vm_properties['public_ip'] = public_ip_pool.public_ip
@@ -517,7 +529,7 @@ def install(parameters):
             attach_disk_status_message = launch_vm_on_host(vm_details, vm_image_location, vm_properties)       
 
             # Checking if vm has been installed successfully
-            assert(check_if_vm_defined(current.db.host[vm_properties['host']].host_ip, vm_details.vm_identity)), "VM is not installed. Check logs."
+            assert(check_if_vm_defined(current.db.host[vm_properties['host']].host_ip.private_ip, vm_details.vm_identity)), "VM is not installed. Check logs."
 
             if vm_properties['public_ip_req']:
                 create_mapping(vm_properties['public_ip'], vm_properties['private_ip'])
@@ -783,7 +795,7 @@ def migrate_domain(vm_id, destination_host_id=None, live_migration=False):
     if destination_host_id == None:
         destination_host_id = find_new_host(vm_details.RAM, vm_details.vCPU)
 
-    destination_host_ip = current.db.host[destination_host_id]['host_ip']
+    destination_host_ip = current.db.host[destination_host_id].host_ip.private_ip
 
     flags = VIR_MIGRATE_PEER2PEER|VIR_MIGRATE_PERSIST_DEST|VIR_MIGRATE_UNDEFINE_SOURCE|VIR_MIGRATE_UNSAFE
     if live_migration:
@@ -865,25 +877,25 @@ def migrate_domain_datastore(vmid, destination_datastore_id, live_migration=Fals
                 logger.debug("Copied successfully")
 
         else:
-          if domain.isActive:
-            domain.undefine()
-
-            root = etree.fromstring(xmlfile)
-            target_elem = root.find("devices/disk/target")
-            target_disk = target_elem.get('dev')
-#
-#           destxml = generate_blockcopy_xml(diskpath,target_disk)
-            flag = VIR_DOMAIN_BLOCK_REBASE_SHALLOW | VIR_DOMAIN_BLOCK_REBASE_COPY
-            domain.blockRebase(target_disk, diskpath, 0, flag)
-
-            block_info_list = domain.blockJobInfo(current_disk_file,0)
-
-            while(block_info_list['end'] != block_info_list['cur']):
-                logger.debug("time to sleep")
-                time.sleep(60)
+            if domain.isActive:
+                domain.undefine()
+                
+                root = etree.fromstring(xmlfile)
+                target_elem = root.find("devices/disk/target")
+                target_disk = target_elem.get('dev')
+                #
+                #           destxml = generate_blockcopy_xml(diskpath,target_disk)
+                flag = VIR_DOMAIN_BLOCK_REBASE_SHALLOW | VIR_DOMAIN_BLOCK_REBASE_COPY
+                domain.blockRebase(target_disk, diskpath, 0, flag)
+                
                 block_info_list = domain.blockJobInfo(current_disk_file,0)
-
-            domain.blockJobAbort(current_disk_file, VIR_DOMAIN_BLOCK_JOB_ABORT_PIVOT)
+                
+                while(block_info_list['end'] != block_info_list['cur']):
+                    logger.debug("time to sleep")
+                    time.sleep(60)
+                    block_info_list = domain.blockJobInfo(current_disk_file,0)
+                
+                domain.blockJobAbort(current_disk_file, VIR_DOMAIN_BLOCK_JOB_ABORT_PIVOT)
 
         source_elem = root.find("devices/disk/source")
         source_elem.set('file',diskpath)
@@ -1092,10 +1104,7 @@ def edit_vm_config(parameters):
         if 'public_ip' in parameters:
             enable_public_ip = parameters['public_ip']
             if enable_public_ip:
-                public_ip_pool = current.db((~current.db.public_ip_pool.id.belongs(current.db(current.db.vm_data.public_ip != None)._select(current.db.vm_data.public_ip))) 
-                                          & (~current.db.public_ip_pool.id.belongs(current.db(current.db.host.public_ip != None)._select(current.db.host.public_ip)))
-                                          & (current.db.public_ip_pool.is_active == True)) \
-                                        .select(current.db.public_ip_pool.ALL, orderby='<random>').first()
+                public_ip_pool = choose_random_public_ip()
 
                 if public_ip_pool:
                     create_mapping(public_ip_pool.public_ip, vm_details.private_ip)
@@ -1179,7 +1188,7 @@ def get_clone_properties(vm_details, cloned_vm_details, vm_properties):
 def migrate_clone_to_new_host(vm_details, cloned_vm_details, new_host_id_for_cloned_vm,vm_properties):
 
     try:
-        new_host_ip_for_cloned_vm = current.db.host[new_host_id_for_cloned_vm]['host_ip']
+        new_host_ip_for_cloned_vm = current.db.host[new_host_id_for_cloned_vm].host_ip.private_ip
         logger.debug("New host ip for cloned vm is: " + str(new_host_ip_for_cloned_vm))
         flags = VIR_MIGRATE_PEER2PEER|VIR_MIGRATE_PERSIST_DEST|VIR_MIGRATE_UNDEFINE_SOURCE|VIR_MIGRATE_OFFLINE|VIR_MIGRATE_UNSAFE
         logger.debug("Clone currently on: " + str(vm_details.host_id.host_ip))
